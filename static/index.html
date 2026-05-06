@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDS Device Finder</title>
+
+<!--
+  JavaScript modules are loaded at the bottom of <body> in dependency order.
+  To add a new feature:
+    1. Create  static/js/my-feature.js
+    2. Add a <script src="/static/js/my-feature.js"></script> below in the
+       correct position (after its dependencies, before anything that needs it).
+-->
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+
+<!-- ═══ TAB HEADER ═══════════════════════════════════════════════ -->
+<div id="tab-header">
+  <div class="step-tab active" id="tab-1" onclick="goTab(1)"><div class="step-num">1</div><span>GDS Viewer</span></div>
+  <div class="step-tab" id="tab-2" onclick="goTab(2)"><div class="step-num">2</div><span>Device Map</span></div>
+  <div class="step-tab" id="tab-3" onclick="goTab(3)"><div class="step-num">3</div><span>Device Viewer</span></div>
+  <div style="flex:1;"></div>
+  <div style="display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid #21262d;">
+    <input type="text" id="proj-path-input" placeholder="/path/to/project.gdspm"
+      title="Server-side path to the .gdspm project file"
+      style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:10px;padding:3px 8px;border-radius:4px;width:240px;"
+      oninput="projectPath=this.value.trim()">
+    <button onclick="openProject()" style="background:none;border:1px solid #30363d;color:#8b949e;font-family:inherit;font-size:11px;padding:4px 12px;border-radius:4px;cursor:pointer;white-space:nowrap;" onmouseover="this.style.color='#c9d1d9';this.style.borderColor='#8b949e'" onmouseout="this.style.color='#8b949e';this.style.borderColor='#30363d'">📂 Open</button>
+    <button onclick="saveProject()" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 12px;border-radius:4px;cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='#8b949e'" onmouseout="this.style.borderColor='#30363d'">💾 Save</button>
+    <input type="file" id="project-file-input" accept=".gdspm,.json" style="display:none;">
+  </div>
+</div>
+
+<!-- ═══ TAB 1 — GDS VIEWER ═══════════════════════════════════════ -->
+<div class="step-page active" id="page-1">
+  <div class="toolbar">
+    <label class="open-label" for="file-input">⊕ Open GDS</label>
+    <input type="file" id="file-input" accept=".gds,.gds2,.gdsii">
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="t1-fit">⊡ Fit</button>
+    <button class="tb-btn" id="t1-zoomin">+</button>
+    <button class="tb-btn" id="t1-zoomout">−</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn active" id="t1-pan">☩ Pan</button>
+    <button class="tb-btn" id="t1-select" title="Select device boxes (Shift/Ctrl multi-select)">↖ Select</button>
+    <button class="tb-btn" id="t1-ruler" title="Measure distance">↔ Ruler</button>
+    <button class="tb-btn" id="t1-zoombox" title="Zoom box">⬚ Box</button>
+    <div class="tb-sep"></div>
+    <div class="zoom-sens-wrap" id="zsw-1">
+      <button class="tb-btn" onclick="toggleZoomSens(event,'zsw-1')" title="Scroll sensitivity">⟳ Speed</button>
+      <div class="zoom-sens-panel hidden" onclick="event.stopPropagation()">
+        <div class="zoom-sens-panel-title">Scroll Sensitivity</div>
+        <input type="range" min="0" max="100" value="50" step="1" oninput="applyZoomSens(_sliderToSens(this.value))">
+        <div class="zoom-sens-row"><span>0.1×</span><span class="zsv-label">Medium 1.00</span><span>10×</span></div>
+        <div class="zoom-sens-custom-row">
+          <span class="zoom-sens-custom-label">Custom</span>
+          <input type="number" class="zoom-sens-num" min="0.1" max="10" step="0.01" value="1.00" oninput="applyZoomSens(parseFloat(this.value))">
+          <span class="zoom-sens-unit">×</span>
+        </div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+    <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+      <button class="tb-btn primary" id="find-btn" disabled onclick="findDevices()" style="border-radius:4px 0 0 4px;border-right:none;">🔍 Find Devices</button>
+      <button id="find-tol-arrow" disabled onclick="_findTolMenuToggle(event)"
+        style="border-radius:0 4px 4px 0;padding:0 6px;background:#1f6feb;border:1px solid #388bfd;color:#fff;cursor:pointer;font-size:10px;line-height:1;">▾</button>
+      <div id="find-tol-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+        background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:220px;
+        box-shadow:0 8px 24px #010409cc;">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:6px;font-weight:600;letter-spacing:.04em;">FIND DEVICES SETTINGS</div>
+        <label style="font-size:10px;color:#c9d1d9;display:block;margin-bottom:3px;">Overlap Tolerance (µm)</label>
+        <input id="find-tol-input" type="number" value="0.1" min="0" max="50" step="0.1"
+          style="width:100%;background:#21262d;border:1px solid #30363d;color:#c9d1d9;
+            font-family:inherit;font-size:11px;padding:4px 7px;border-radius:4px;box-sizing:border-box;"
+          title="Polygons within this distance are grouped into one device">
+        <div style="font-size:9px;color:#484f58;margin-top:4px;">Default: 0.1 µm (100 nm)</div>
+        <div style="border-top:1px solid #30363d40;margin-top:8px;padding-top:8px;">
+          <div style="font-size:10px;color:#8b949e;margin-bottom:5px;font-weight:600;letter-spacing:.04em;">SEARCH LAYER</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+            <span style="font-size:10px;color:#484f58;">Layer</span>
+            <input id="find-layer-input" type="number" value="1" min="0" max="65535" step="1"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+                font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+              title="GDS layer number to search for device outlines">
+            <span style="font-size:10px;color:#484f58;">Datatype</span>
+            <input id="find-datatype-input" type="number" value="0" min="0" max="65535" step="1"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+                font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+              title="GDS datatype to search for device outlines">
+          </div>
+          <div style="font-size:9px;color:#484f58;margin-top:4px;">Default: layer 1 / datatype 0</div>
+        </div>
+      </div>
+    </div>
+    <button class="tb-btn warn"  id="clear-btn"  disabled onclick="clearDevices()">✕ Clear</button>
+    <button class="tb-btn amber" id="merge-btn"  disabled onclick="mergeIntersectingDevices()">⊕ Merge</button>
+    <button class="tb-btn"       id="group-btn"  disabled onclick="startGroupSelect()" title="Draw a selection window to group devices">⊞ Group Devices</button>
+    <div class="tb-sep"></div>
+    <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+      <button class="tb-btn green" id="t1-export-btn" disabled onclick="exportGDS()" style="border-radius:4px 0 0 4px;border-right:none;">⬇ Export GDS (1/100)</button>
+      <button id="export-layer-arrow" disabled onclick="_exportMenuToggle(event,'export-layer-menu')"
+        style="border-radius:0 4px 4px 0;padding:0 6px;background:#1a3a22;border:1px solid #2ea04366;color:#3fb950;cursor:pointer;font-size:10px;line-height:1;border-left:1px solid #2ea04366;">▾</button>
+      <div id="export-layer-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+        background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:200px;
+        box-shadow:0 8px 24px #010409cc;">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:6px;font-weight:600;letter-spacing:.04em;">EXPORT LAYER</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+          <span style="font-size:10px;color:#484f58;">Layer</span>
+          <input id="export-layer-input" type="number" value="1" min="0" max="65535" step="1"
+            style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+              font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+            oninput="_applyExportSettings()" title="GDS layer for exported bounding boxes">
+          <span style="font-size:10px;color:#484f58;">Datatype</span>
+          <input id="export-datatype-input" type="number" value="100" min="0" max="65535" step="1"
+            style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+              font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+            oninput="_applyExportSettings()" title="GDS datatype for exported bounding boxes">
+        </div>
+        <div style="font-size:9px;color:#484f58;margin-top:4px;">Default: layer 1 / datatype 100</div>
+      </div>
+    </div>
+    <span class="tb-zoom" id="zoom-info-1">zoom: 1.00×</span>
+  </div>
+  <div class="main-row">
+    <!-- Left sidebar: Cells + Layers -->
+    <div class="sidebar" id="sb-left" style="width:200px;">
+      <div class="resize-handle" id="sb-left-handle"></div>
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:60px;" id="cells-section">
+        <div class="panel-title">Cells</div>
+        <div class="panel-scroll" id="cell-list">
+          <div class="cell-item" style="color:#484f58;font-style:italic;font-size:10px;padding:10px 12px;">No file loaded</div>
+        </div>
+      </div>
+      <div class="row-handle" id="sb-left-row-handle"></div>
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:60px;" id="layers-section">
+        <div class="panel-title">Layer / Datatype</div>
+        <div class="panel-scroll" id="layer-list"></div>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div id="canvas-wrap">
+      <canvas id="gds-canvas"></canvas>
+      <div id="drop-overlay">
+        <div class="drop-box">⬡</div>
+        <div class="drop-title">Drop a GDS file here</div>
+        <div class="drop-sub">Double-click to open · Right-click to fit view</div>
+      </div>
+    </div>
+
+    <!-- Right sidebar: Devices / Groups -->
+    <div class="sidebar-right" id="devices-sidebar" style="width:242px;">
+      <div class="resize-handle-left" id="devices-handle"></div>
+      <div class="panel-title">Devices (<span id="devices-count">0</span>)</div>
+      <div class="panel-scroll" id="device-list">
+        <div class="no-devices" id="no-devices-msg">
+          <span style="font-size:22px;opacity:.3;">◈</span>
+          <span>Open a GDS and click<br><strong>Find Devices</strong></span>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="panel-footer-btn green" id="export-footer-btn" disabled onclick="exportGDS()">⬇ Export GDS (layer 999/0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB 2 — DEVICE MAP ════════════════════════════════════════ -->
+<div class="step-page" id="page-2">
+  <div class="toolbar">
+    <button class="tb-btn" id="t2-fit">⊡ Fit</button>
+    <button class="tb-btn" id="t2-zoomin">+</button>
+    <button class="tb-btn" id="t2-zoomout">−</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn active" id="t2-pan">☩ Pan</button>
+    <button class="tb-btn" id="t2-select" title="Select device boxes">↖ Select</button>
+    <button class="tb-btn" id="t2-ruler" title="Measure distance">↔ Ruler</button>
+    <button class="tb-btn" id="t2-zoombox" title="Zoom box">⬚ Box</button>
+    <div class="tb-sep"></div>
+    <div class="zoom-sens-wrap" id="zsw-2">
+      <button class="tb-btn" onclick="toggleZoomSens(event,'zsw-2')" title="Scroll sensitivity">⟳ Speed</button>
+      <div class="zoom-sens-panel hidden" onclick="event.stopPropagation()">
+        <div class="zoom-sens-panel-title">Scroll Sensitivity</div>
+        <input type="range" min="0" max="100" value="50" step="1" oninput="applyZoomSens(_sliderToSens(this.value))">
+        <div class="zoom-sens-row"><span>0.1×</span><span class="zsv-label">Medium 1.00</span><span>10×</span></div>
+        <div class="zoom-sens-custom-row">
+          <span class="zoom-sens-custom-label">Custom</span>
+          <input type="number" class="zoom-sens-num" min="0.1" max="10" step="0.01" value="1.00" oninput="applyZoomSens(parseFloat(this.value))">
+          <span class="zoom-sens-unit">×</span>
+        </div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+    <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+      <button class="tb-btn green" id="t2-export-btn" disabled onclick="exportGDS()" style="border-radius:4px 0 0 4px;border-right:none;">⬇ Export GDS (1/100)</button>
+      <button id="export-layer-arrow-2" disabled onclick="_exportMenuToggle(event,'export-layer-menu-2')"
+        style="border-radius:0 4px 4px 0;padding:0 6px;background:#1a3a22;border:1px solid #2ea04366;color:#3fb950;cursor:pointer;font-size:10px;line-height:1;border-left:1px solid #2ea04366;">▾</button>
+      <div id="export-layer-menu-2" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+        background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:200px;
+        box-shadow:0 8px 24px #010409cc;">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:6px;font-weight:600;letter-spacing:.04em;">EXPORT LAYER</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+          <span style="font-size:10px;color:#484f58;">Layer</span>
+          <input id="export-layer-input-2" type="number" value="1" min="0" max="65535" step="1"
+            style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+              font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+            oninput="_applyExportSettings2()" title="GDS layer for exported bounding boxes">
+          <span style="font-size:10px;color:#484f58;">Datatype</span>
+          <input id="export-datatype-input-2" type="number" value="100" min="0" max="65535" step="1"
+            style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;
+              font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+            oninput="_applyExportSettings2()" title="GDS datatype for exported bounding boxes">
+        </div>
+        <div style="font-size:9px;color:#484f58;margin-top:4px;">Default: layer 1 / datatype 100</div>
+      </div>
+    </div>
+    <span class="tb-zoom" id="zoom-info-2">zoom: 1.00×</span>
+  </div>
+  <div class="main-row">
+    <div style="flex:1;position:relative;overflow:hidden;background:#0a0c10;" id="canvas-wrap-2">
+      <canvas id="gds-canvas-2"></canvas>
+    </div>
+    <!-- Right sidebar: Devices / Groups (mirrors Tab 1) -->
+    <div class="sidebar-right" id="devices-sidebar-2" style="width:242px;">
+      <div class="resize-handle-left" id="devices-handle-2"></div>
+      <div class="panel-title">Devices (<span id="devices-count-2">0</span>)</div>
+      <div class="panel-scroll" id="device-list-2">
+        <div class="no-devices">
+          <span style="font-size:22px;opacity:.3;">◈</span>
+          <span>Open a GDS and click<br><strong>Find Devices</strong></span>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="panel-footer-btn green" id="export-footer-btn-2" disabled onclick="exportGDS()">⬇ Export GDS (layer 999/0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB 3 — DEVICE VIEWER ════════════════════════════════════ -->
+<div class="step-page" id="page-3">
+  <!-- Header: back + device info + sub-tab buttons -->
+  <div id="dv-header">
+    <button class="tb-btn" onclick="goTab(2)" style="flex-shrink:0;">← Back to Device Map</button>
+    <div class="tb-sep"></div>
+    <span id="dv-title">—</span>
+    <span id="dv-dims" style="margin-left:6px;"></span>
+    <div style="flex:1;"></div>
+    <button class="dv-stab active" id="dv-st1" onclick="setDvSubTab(1)">⬡ GDS Preview</button>
+    <button class="dv-stab" id="dv-st2" onclick="setDvSubTab(2)">📷 SEM Imaging</button>
+    <button class="dv-stab" id="dv-st3" onclick="setDvSubTab(3)">📈 Optical Spectra</button>
+    <button class="dv-stab" id="dv-st4" onclick="setDvSubTab(4)">📋 Optical Data</button>
+  </div>
+
+  <!-- ── Sub-tab 1: GDS Preview ── -->
+  <div class="dv-subpage active" id="dv-sub1">
+    <div class="toolbar">
+      <button class="tb-btn" id="t3-fitdev" onclick="fitToActiveDevice()" title="Fit view to this device">⊡ Fit Device</button>
+      <button class="tb-btn" id="t3-fitgrp" onclick="fitActiveGroup()" title="Fit view to the device group">⊞ Fit Group</button>
+      <button class="tb-btn" id="t3-fitall" onclick="fitView()" title="Fit all GDS content">⬚ Fit All</button>
+      <button class="tb-btn" id="t3-zoomin" onclick="applyZoom(2,null)">+</button>
+      <button class="tb-btn" id="t3-zoomout" onclick="applyZoom(0.5,null)">−</button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn active" id="t3-pan">☩ Pan</button>
+      <button class="tb-btn" id="t3-ruler" title="Measure distance">↔ Ruler</button>
+      <span class="tb-zoom" id="zoom-info-3">zoom: 1.00×</span>
+    </div>
+    <div style="flex:1;position:relative;overflow:hidden;background:#0a0c10;" id="canvas-wrap-3">
+      <canvas id="gds-canvas-3"></canvas>
+      <div id="dv-noDev" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#484f58;font-size:12px;text-align:center;pointer-events:none;">
+        <span style="font-size:28px;opacity:.25;">◈</span>
+        <span>No device selected.<br>Click a bounding box in <strong>Device Map</strong>.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sub-tab 2: SEM Imaging ── -->
+  <div class="dv-subpage" id="dv-sub2">
+    <div class="toolbar">
+      <button class="tb-btn open-label" onclick="_semPickDir()" title="Pick a directory — all .bmp files matching device names are loaded automatically">📁 Pick Dir</button>
+      <input type="file" id="sem-dir-input" webkitdirectory multiple style="display:none;">
+      <button class="tb-btn warn" onclick="clearSemDir()" title="Clear directory scan">✕ Dir</button>
+      <div class="tb-sep"></div>
+      <label class="open-label" for="sem-input" title="Manually upload images for this device">⊕ Upload</label>
+      <input type="file" id="sem-input" accept="image/*" multiple style="display:none;">
+      <button class="tb-btn warn" onclick="clearSemImages()" title="Clear manually uploaded images for this device">✕ Clear</button>
+      <div class="tb-sep"></div>
+      <span style="font-size:10px;color:#484f58;flex-shrink:0;">Path:</span>
+      <input type="text" id="sem-server-path" placeholder="/path/to/sem/folder" title="Server-side SEM directory — images auto-matched by device name"
+        style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:10px;padding:3px 6px;border-radius:4px;width:200px;"
+        onchange="_scanSemFromServer(this.value.trim())">
+      <div class="tb-sep"></div>
+      <span id="sem-dir-status" style="font-size:10px;color:#484f58;flex-shrink:0;">No directory loaded</span>
+      <span class="tb-zoom" id="sem-count">0 images</span>
+    </div>
+    <div id="sem-grid" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start;background:#0a0c10;"></div>
+  </div>
+
+  <!-- ── SEM Image Preview (full-page, entered by clicking a thumbnail) ── -->
+  <div class="dv-subpage" id="dv-sub-semprev">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="tb-btn" onclick="closeSemPreview()" title="Return to SEM image grid">← Back to SEM Image Library</button>
+      <button class="tb-btn" onclick="resetSemRuler()" title="Right-click canvas to clear · Click to place points">↺ Ruler</button>
+      <button class="tb-btn" onclick="_semFitCanvas()" title="Fit image to area">⊡ Fit</button>
+      <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+        <button class="tb-btn" id="sem-grid-btn" onclick="_semGridToggle()" title="Toggle grid overlay" style="border-radius:4px 0 0 4px;border-right:none;padding-right:6px;">⊞ Grid</button>
+        <button onclick="_semGridMenuToggle(event)" title="Grid settings" style="border-radius:0 4px 4px 0;padding:0 5px;background:#21262d;border:1px solid #30363d;color:#8b949e;cursor:pointer;font-size:9px;line-height:1;border-left:1px solid #30363d;">▾</button>
+        <div id="sem-grid-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;z-index:200;min-width:200px;box-shadow:0 8px 24px #010409cc;font-family:monospace;font-size:11px;">
+          <div style="color:#8b949e;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Grid Settings</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center;margin-bottom:10px;">
+            <span style="color:#484f58;">Rows</span>
+            <input type="number" id="sg-rows" value="10" min="1" max="100" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:11px;padding:3px 6px;border-radius:4px;width:100%;box-sizing:border-box;">
+            <span style="color:#484f58;">Cols</span>
+            <input type="number" id="sg-cols" value="10" min="1" max="100" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:11px;padding:3px 6px;border-radius:4px;width:100%;box-sizing:border-box;">
+            <span style="color:#484f58;">Width (px)</span>
+            <input type="number" id="sg-width" value="1" min="0.5" max="10" step="0.5" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:11px;padding:3px 6px;border-radius:4px;width:100%;box-sizing:border-box;">
+            <span style="color:#484f58;">Colour</span>
+            <input type="text" id="sg-color" value="#00ffff" maxlength="7" placeholder="#00ffff" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:monospace;font-size:11px;padding:3px 6px;border-radius:4px;width:100%;box-sizing:border-box;">
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="_semGridApply()" style="flex:1;background:#238636;border:1px solid #2ea043;color:#fff;font-family:inherit;font-size:11px;padding:4px 8px;border-radius:4px;cursor:pointer;">Apply</button>
+            <button onclick="_semGridReset()" style="flex:1;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 8px;border-radius:4px;cursor:pointer;">Reset</button>
+          </div>
+        </div>
+      </div>
+      <div class="tb-sep"></div>
+      <span id="sem-prev-title" style="font-size:10px;color:#8b949e;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;"></span>
+    </div>
+    <!-- Body: props column left, image centred in remaining space -->
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+      <!-- Left: properties panel -->
+      <div id="sem-props-panel" style="width:240px;flex-shrink:0;overflow-y:auto;background:#0d1117;border-right:1px solid #21262d;padding:16px 14px;font-family:monospace;"></div>
+      <!-- Right: canvas area — canvas centred inside, grey border shows viewer bounds -->
+      <div id="sem-canvas-area" style="flex:1;display:flex;align-items:center;justify-content:center;background:#0a0c10;overflow:hidden;position:relative;border:1px solid #30363d;">
+        <canvas id="sem-preview-canvas" style="cursor:crosshair;display:block;"></canvas>
+      </div>
+    </div>
+    <!-- Footer: ruler readout -->
+    <div id="sem-ruler-readout" style="flex-shrink:0;padding:5px 14px;background:#161b22;border-top:1px solid #21262d;font-family:monospace;font-size:10px;display:flex;align-items:center;gap:0;">
+      <span id="sem-ruler-hint" style="color:#484f58;flex:1;">🖱 Scroll to zoom · Drag to pan · Click to set Pt 1</span>
+      <span id="sem-ruler-measure" style="display:none;align-items:center;gap:10px;">
+        <span style="color:#484f58;">distance:</span>
+        <span id="sem-ruler-px" style="color:#c9d1d9;background:#21262d;padding:2px 8px;border-radius:4px;"></span>
+        <span style="color:#484f58;">→</span>
+        <span id="sem-ruler-nm" style="color:#58a6ff;font-weight:bold;background:#0d2137;padding:2px 10px;border-radius:4px;"></span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ── Sub-tab 3: Optical Data ── -->
+  <div class="dv-subpage" id="dv-sub3">
+    <div class="toolbar">
+      <label class="open-label" for="opt-input" title="Pick directory in browser">📁 Pick Dir</label>
+      <input type="file" id="opt-input" webkitdirectory multiple style="display:none;">
+      <input type="text" id="opt-path" style="display:none;">
+      <button class="tb-btn primary" onclick="plotAllOptDevices()">📊 Plot</button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" id="opt-fit-btn"    onclick="_optFit()"              title="Fit view to data">⊡ Fit</button>
+      <button class="tb-btn" id="opt-zoomin-btn" onclick="_optZoomBtn(true)"       title="Zoom in">+</button>
+      <button class="tb-btn" id="opt-zoomout-btn"onclick="_optZoomBtn(false)"      title="Zoom out">−</button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn active" id="opt-pan-btn"    onclick="_setOptTool('pan')"     title="Pan (drag)">☩ Pan</button>
+      <button class="tb-btn"        id="opt-box-btn"    onclick="_setOptTool('zoombox')" title="Zoom box (drag)">⬚ Box</button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" onclick="_resetOptView()" title="Reset zoom and restore all curves">↺ Reset</button>
+      <button class="tb-btn" id="btn-subtract" onclick="toggleOptSubtract()" title="Subtract Ref (1→6) from all curves">⇅ Subtract Ref</button>
+      <span style="font-size:10px;color:#8b949e;flex-shrink:0;">Roll:</span>
+      <input type="number" id="opt-rolling" value="1" min="1" max="500" oninput="onRollingChange()" title="Rolling-average window (pts)">
+      <span style="font-size:10px;color:#8b949e;flex-shrink:0;">λ target:</span>
+      <input type="number" id="opt-target-wl" value="1550" step="0.5" min="1400" max="1700" oninput="onTargetWLChange()" title="Target wavelength (nm)" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:10px;padding:3px 5px;border-radius:4px;width:120px;text-align:left;">
+      <div class="tb-sep"></div>
+      <button class="tb-btn warn" onclick="clearOptData()">✕ Clear</button>
+      <span class="tb-zoom" id="opt-status">No data loaded</span>
+    </div>
+    <div id="opt-dev-items" style="display:none;"></div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div id="opt-chart-wrap" style="flex:1;position:relative;overflow:hidden;background:#0a0c10;">
+        <canvas id="opt-chart" style="display:block;cursor:crosshair;"></canvas>
+        <div id="opt-ph" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#484f58;font-size:12px;text-align:center;pointer-events:none;">
+          <span style="font-size:28px;opacity:.25;">📈</span>
+          <span id="opt-ph-msg">Pick a directory or enter a server path, then click <strong>Scan</strong>.<br>Select a device in Tab 2 to auto-load its optical data.</span>
+        </div>
+      </div>
+      <div id="opt-legend"></div>
+    </div>
+  </div>
+
+  <!-- ── Sub-tab 4: Optical Data readout ── -->
+  <div class="dv-subpage" id="dv-sub4">
+    <div class="toolbar" style="flex-shrink:0;">
+      <span style="font-size:10px;color:#8b949e;flex-shrink:0;">λ target:</span>
+      <input type="number" id="opt-target-wl-2" value="1550" step="0.5" min="1400" max="1700" oninput="onTargetWLChange2()" title="Target wavelength (nm)" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:10px;padding:3px 5px;border-radius:4px;width:120px;text-align:left;">
+      <span style="font-size:10px;color:#484f58;margin-left:4px;">nm</span>
+      <div class="tb-sep"></div>
+      <span style="font-size:10px;color:#8b949e;flex-shrink:0;">Ref:</span>
+      <span id="opt-rd-ref-lbl" title="Reference curve IL at target wavelength" style="font-size:10px;font-family:monospace;color:#484f58;background:#21262d;padding:1px 6px;border-radius:3px;min-width:66px;text-align:right;flex-shrink:0;">—</span>
+      <div class="tb-sep"></div>
+      <span style="font-size:10px;color:#484f58;">Rolling avg applied · Ref curve auto-detected</span>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;">
+      <div id="opt-rd-empty" style="color:#484f58;font-size:11px;text-align:center;padding-top:40px;">No optical data loaded — load data in Optical Spectra first.</div>
+      <div id="opt-rd-table" style="display:none;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #30363d;">
+          <span style="font-size:10px;color:#484f58;font-family:monospace;flex:1;">Curve</span>
+          <span style="font-size:9px;color:#8b949e;font-family:monospace;background:#21262d;padding:1px 5px;border-radius:3px;">Raw IL</span>
+          <span style="font-size:9px;color:#58a6ff;font-family:monospace;background:#0d2137;padding:1px 5px;border-radius:3px;">IL − Ref</span>
+        </div>
+        <div style="font-size:9px;color:#484f58;margin-bottom:10px;">
+          at <span id="opt-rd-wl-lbl" style="color:#58a6ff;font-weight:bold;">1550.0 nm</span>
+        </div>
+        <div id="opt-rd-rows"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ STATUS BAR ═══════════════════════════════════════════════ -->
+<div id="statusbar">
+  <span><span class="stat-label">file: </span><span id="st-file">—</span></span>
+  <span><span class="stat-label">cell: </span><span id="st-cell">—</span></span>
+  <span><span class="stat-label">layers: </span><span id="st-layers">—</span></span>
+  <span><span class="stat-label">devices: </span><span id="st-devices">0</span></span>
+  <span><span class="stat-label">unit: </span><span id="st-unit">—</span></span>
+  <span><span class="stat-label">mode: </span><span id="st-mode">pan</span></span>
+  <span><span class="stat-label">cursor: </span><span id="st-cursor">—</span></span>
+</div>
+
+<!-- ═══ MODAL ════════════════════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Info</div>
+    <div class="modal-desc" id="modal-desc"></div>
+    <div class="modal-result" id="modal-result" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="modal-btn primary" onclick="closeModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ JAVASCRIPT — loaded in dependency order ═══════════════════
+     Each file is a self-contained module with a header comment
+     explaining what it owns and what it depends on.
+
+     To add a new feature:
+       1. Create static/js/my-feature.js
+       2. Add its <script> tag in the correct position below
+          (after its deps, before anything that needs it)
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- Foundation: parser and all global state -->
+<script src="/static/js/gds-parser.js"></script>
+<script src="/static/js/state.js"></script>
+
+<!-- Canvas setup and coordinate helpers -->
+<script src="/static/js/canvas.js"></script>
+
+<!-- All rendering (GDS draw, device map, overlays) -->
+<script src="/static/js/renderer.js"></script>
+
+<!-- Left sidebar: cell list and layer list panels -->
+<script src="/static/js/panels.js"></script>
+
+<!-- GDS file I/O, device detection, backend sync -->
+<script src="/static/js/gds-io.js"></script>
+
+<!-- Right sidebar: device/group panel -->
+<script src="/static/js/devices-panel.js"></script>
+
+<!-- GDS export helper -->
+<script src="/static/js/export.js"></script>
+
+<!-- Tab and sub-tab navigation -->
+<script src="/static/js/navigation.js"></script>
+
+<!-- Mouse/touch/keyboard interaction and sidebar resize -->
+<script src="/static/js/interaction.js"></script>
+
+<!-- Modal dialogs -->
+<script src="/static/js/modal.js"></script>
+
+<!-- SEM image viewer (sub-tab 2) -->
+<script src="/static/js/sem.js"></script>
+
+<!-- Project save / open (.gdspm) -->
+<script src="/static/js/project.js"></script>
+
+<!-- Optical data — chart, readout, CSV parsing (sub-tabs 3 & 4) -->
+<script src="/static/js/optical.js"></script>
+
+<!-- Device viewer core + application init()  ← must be LAST:
+     its IIFE calls initCanvases, setupMouse, _initSemPreviewHandlers,
+     _initProjectHandlers, redraw1/2 — all defined in earlier scripts -->
+<script src="/static/js/device-viewer.js"></script>
+
+</body>
+</html>
