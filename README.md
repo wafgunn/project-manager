@@ -225,20 +225,6 @@ means adding one entry to each registry — no existing code changes.
 
 ---
 
-## Running tests (future)
-
-No automated tests exist yet.  Suggested test files to add:
-
-```
-tests/
-├── test_gds_algorithms.py     # parse + find_designs round-trip
-├── test_optical_algorithms.py # CSV parse for each device type
-├── test_routers.py            # FastAPI TestClient smoke tests
-└── test_plugins.py            # verify PLUGIN_REGISTRY completeness
-```
-
----
-
 ## Requirements
 
 ```
