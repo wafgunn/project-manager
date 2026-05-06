@@ -1,0 +1,11 @@
+The folder contains the following example files:
+
+- An example w1_chip23.gdspm (GDS project manager file type) which contains the original uploaded GDS (also listed here), as well as group and device names. 
+
+- The original GDS w1_chip23.gds. 
+
+- w1_chip23_opticaldata/ which contains example data to play around with the optical data functionality of the manager.
+
+- w1_chip23_crosserSEM/ which contains SEM images with filename convention that the manager reads.
+
+Have a play around, but the data is from my PhD so don't send around :) I'll do up a demo file at some point containing some dummy designs and data. 
