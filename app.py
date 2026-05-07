@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from routers import gds, optical, sem, project
+from routers import gds, optical, sem, project, gratings, waveguides
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
@@ -41,10 +41,12 @@ async def index():
 # ── Feature routers ───────────────────────────────────────────────────────────
 # Each router owns one feature area.  Order matters for /docs display only.
 
-app.include_router(gds.router,     tags=["GDS"])
-app.include_router(optical.router, tags=["Optical"])
-app.include_router(sem.router,     tags=["SEM"])
-app.include_router(project.router, tags=["Project"])
+app.include_router(gds.router,      tags=["GDS"])
+app.include_router(optical.router,  tags=["Optical"])
+app.include_router(sem.router,      tags=["SEM"])
+app.include_router(project.router,  tags=["Project"])
+app.include_router(gratings.router,   tags=["Gratings"])
+app.include_router(waveguides.router, tags=["Waveguides"])
 
 
 # ── Dev server ────────────────────────────────────────────────────────────────

@@ -88,6 +88,22 @@ function saveProject(){
     optTargetWL:optTargetWL,
     hiddenCurves:Array.from(hiddenCurves),
     optSubtract:optSubtract,
+    chipLossActive:chipLossActive,
+    chipLossDbCm:chipLossDbCm,
+    // Grating finder settings + found gratings
+    gratingSettings:{
+      layer:          parseInt((document.getElementById('grd-layer')||{}).value||2),
+      datatype:       parseInt((document.getElementById('grd-dt')||{}).value||6),
+      tolerance:      parseFloat((document.getElementById('grd-tolerance')||{}).value||1.0),
+      fibrePitchEnabled: (document.getElementById('grd-fibre-pitch-en')||{}).checked!==false,
+      fibrePitch:     parseFloat((document.getElementById('grd-fibre-pitch')||{}).value||127.0),
+    },
+    gratings:gratings,
+    // Waveguide length measurements
+    wgLengths:wgLengths,
+    wgSettings:{
+      widthUm: parseFloat((document.getElementById('wg-width-um')||{}).value||0.5),
+    },
   };
   if(!projectPath){
     alert('Enter the project file path (.gdspm) in the top bar first.');return;
@@ -171,6 +187,12 @@ function _applyProject(s){
   optTargetWL=s.optTargetWL||1550;
   hiddenCurves=new Set(s.hiddenCurves||[]);
   optSubtract=!!s.optSubtract;
+  chipLossActive=!!s.chipLossActive;
+  if(s.chipLossDbCm!==undefined)chipLossDbCm=s.chipLossDbCm;
+  var clBtn=document.getElementById('btn-chip-loss');
+  if(clBtn)clBtn.classList.toggle('active',chipLossActive);
+  var clInp=document.getElementById('chip-loss-input');
+  if(clInp)clInp.value=chipLossDbCm;
   // Navigate to saved tab then re-render
   goTab(s.currentTab||1);
   updateDevicesPanel();
@@ -202,6 +224,26 @@ function _applyProject(s){
     optFiles=[];optFileMap={};optDevices=[];optCurrentKey=null;optCache={};
     _scanOptFromServer(optServerPath);
   }
+  // Grating finder settings + previously found gratings
+  gratings=s.gratings||[];
+  if(s.gratingSettings){
+    var gs=s.gratingSettings;
+    el=document.getElementById('grd-layer');          if(el)el.value=gs.layer!==undefined?gs.layer:2;
+    el=document.getElementById('grd-dt');             if(el)el.value=gs.datatype!==undefined?gs.datatype:6;
+    el=document.getElementById('grd-tolerance');      if(el)el.value=gs.tolerance!==undefined?gs.tolerance:1.0;
+    el=document.getElementById('grd-fibre-pitch-en'); if(el)el.checked=gs.fibrePitchEnabled!==undefined?gs.fibrePitchEnabled:true;
+    el=document.getElementById('grd-fibre-pitch');    if(el)el.value=gs.fibrePitch!==undefined?gs.fibrePitch:127.0;
+    if(typeof _gratingFibrePitchToggle==='function')_gratingFibrePitchToggle();
+  }
+  // Waveguide length measurements + settings
+  wgLengths=s.wgLengths||[];
+  if(s.wgSettings){
+    var ws=s.wgSettings;
+    el=document.getElementById('wg-width-um');
+    if(el)el.value=ws.widthUm!==undefined?ws.widthUm:(ws.widthNm!==undefined?ws.widthNm/1000:0.5);
+  }
+  // Refresh measurements panel after project load
+  if(typeof _wgRenderMeasurementsPanel==='function')_wgRenderMeasurementsPanel();
 }
 
 // Wire up file input on page load (called from init block at bottom)

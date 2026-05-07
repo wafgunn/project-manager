@@ -265,6 +265,131 @@
       <div class="tb-sep"></div>
       <button class="tb-btn active" id="t3-pan">☩ Pan</button>
       <button class="tb-btn" id="t3-ruler" title="Measure distance">↔ Ruler</button>
+      <div class="tb-sep"></div>
+      <!-- ── Find Optical Gratings — split button + settings dropdown ── -->
+      <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+        <button class="tb-btn primary" id="find-gratings-btn" onclick="findOpticalGratings()"
+          style="border-radius:4px 0 0 4px;border-right:none;"
+          title="Find optical grating couplers within all device bounding boxes">✦ Find Optical Gratings</button>
+        <button id="grd-settings-arrow" onclick="_gratingMenuToggle(event)"
+          style="border-radius:0 4px 4px 0;padding:0 6px;background:#1f6feb;border:1px solid #388bfd;color:#fff;cursor:pointer;font-size:10px;line-height:1;border-left:1px solid #388bfd55;"
+          title="Grating finder settings">▾</button>
+        <div id="grd-settings-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+          background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:224px;
+          box-shadow:0 8px 24px #010409cc;">
+          <!-- Grating layer / datatype -->
+          <div style="font-size:10px;color:#8b949e;margin-bottom:5px;font-weight:600;letter-spacing:.04em;">GRATING LAYER</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+            <span style="font-size:10px;color:#484f58;">Layer</span>
+            <input id="grd-layer" type="number" value="2" min="0" max="65535" step="1"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+              title="GDS layer number for grating polygons">
+            <span style="font-size:10px;color:#484f58;">Datatype</span>
+            <input id="grd-dt" type="number" value="6" min="0" max="65535" step="1"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:3px 7px;border-radius:4px;box-sizing:border-box;"
+              title="GDS datatype for grating polygons">
+          </div>
+          <div style="font-size:9px;color:#484f58;margin-top:4px;">Default: layer 2 / datatype 6</div>
+          <!-- Overlap spacing -->
+          <div style="border-top:1px solid #30363d40;margin-top:8px;padding-top:8px;">
+            <div style="font-size:10px;color:#8b949e;margin-bottom:5px;font-weight:600;letter-spacing:.04em;">OVERLAP SPACING</div>
+            <input id="grd-tolerance" type="number" value="1" min="0.01" step="0.1"
+              style="width:100%;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 7px;border-radius:4px;box-sizing:border-box;"
+              title="Merge radius — trench polygons within this distance are grouped into one grating">
+            <div style="font-size:9px;color:#484f58;margin-top:4px;">Merge radius for trench polygons (µm). Default: 1 µm</div>
+          </div>
+          <!-- Fibre pitch -->
+          <div style="border-top:1px solid #30363d40;margin-top:8px;padding-top:8px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <input type="checkbox" id="grd-fibre-pitch-en" checked onchange="_gratingFibrePitchToggle()" style="cursor:pointer;flex-shrink:0;">
+              <label for="grd-fibre-pitch-en" style="font-size:10px;color:#8b949e;font-weight:600;letter-spacing:.04em;cursor:pointer;user-select:none;">FIBRE PITCH</label>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input id="grd-fibre-pitch" type="number" value="127" min="1" step="0.5"
+                style="flex:1;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 7px;border-radius:4px;box-sizing:border-box;"
+                title="Expected fibre array pitch (µm)">
+              <span style="font-size:10px;color:#484f58;flex-shrink:0;">µm</span>
+            </div>
+            <div style="font-size:9px;color:#484f58;margin-top:4px;">Expected fibre array pitch. Default: 127 µm</div>
+          </div>
+        </div>
+      </div>
+      <!-- ── Measure Waveguide Lengths — pinned immediately right of Find Gratings ── -->
+      <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;margin-left:4px;">
+        <button class="tb-btn" id="measure-wg-btn" onclick="measureWaveguideLengths()"
+          style="border-radius:4px 0 0 4px;border-right:none;"
+          title="Trace waveguide centreline lengths between grating couplers">⟵⟶ Measure Waveguide Lengths</button>
+        <button id="wg-settings-arrow" onclick="_wgMenuToggle(event)"
+          style="border-radius:0 4px 4px 0;padding:0 6px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;cursor:pointer;font-size:10px;line-height:1;border-left:1px solid #30363d55;"
+          title="Waveguide measurement settings">▾</button>
+        <div id="wg-settings-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;
+          background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:260px;
+          box-shadow:0 8px 24px #010409cc;">
+          <!-- From / To grating selection -->
+          <div style="font-size:10px;color:#8b949e;margin-bottom:5px;font-weight:600;letter-spacing:.04em;">GRATING PORTS</div>
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 6px;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;color:#484f58;">From</span>
+            <select id="wg-from"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:3px 5px;border-radius:4px;box-sizing:border-box;">
+            </select>
+            <span></span>
+            <span style="font-size:10px;color:#484f58;">To</span>
+            <select id="wg-to"
+              style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:3px 5px;border-radius:4px;box-sizing:border-box;">
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#8b949e;white-space:nowrap;cursor:pointer;">
+              <input type="checkbox" id="wg-to-all" onchange="_wgToAllToggle()" style="cursor:pointer;">All
+            </label>
+          </div>
+          <div style="font-size:9px;color:#484f58;margin-bottom:6px;">Ports limited to active device. "All" measures to every other grating.</div>
+          <!-- Waveguide width -->
+          <div style="border-top:1px solid #30363d40;margin-top:6px;padding-top:8px;">
+            <div style="font-size:10px;color:#8b949e;margin-bottom:5px;font-weight:600;letter-spacing:.04em;">WAVEGUIDE WIDTH</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input id="wg-width-um" type="number" value="0.5" min="0.01" step="0.05"
+                style="flex:1;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 7px;border-radius:4px;box-sizing:border-box;"
+                title="Nominal waveguide width in µm (used for bend-length correction)">
+              <span style="font-size:10px;color:#484f58;flex-shrink:0;">µm</span>
+            </div>
+            <div style="font-size:9px;color:#484f58;margin-top:3px;">Nominal WG width used for bend correction. Default: 0.5 µm</div>
+          </div>
+          <!-- Pointer to measurements dropdown -->
+          <div style="border-top:1px solid #30363d40;margin-top:8px;padding-top:8px;">
+            <div style="font-size:9px;color:#484f58;text-align:center;cursor:pointer;"
+              onclick="document.getElementById('wg-settings-menu').style.display='none';_wgMeasDropdownToggle();">
+              📐 View results in <span style="color:#58a6ff;">Measurements →</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span id="wg-status" style="font-size:10px;color:#484f58;flex-shrink:0;margin-left:4px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <div class="tb-sep"></div>
+      <button class="tb-btn warn" id="wg-clear-device-btn" onclick="clearDeviceMeasurements()"
+        title="Clear measurements for the active device only">✕ Device</button>
+      <button class="tb-btn warn" id="wg-clear-all-btn" onclick="clearAllMeasurements()"
+        title="Clear all waveguide measurements across every device">✕ All</button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" id="wg-apply-type-btn" onclick="applyWgToAllType(event)"
+        title="Copy active device's measurements to all other devices with the same type prefix (e.g. all 'crossers_*')">↗ Apply to All Type</button>
+      <div style="flex:1;"></div>
+      <!-- ── Measurements dropdown (pinned right) ── -->
+      <div id="wg-meas-wrapper" style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;margin-right:6px;">
+        <button class="tb-btn" id="wg-meas-btn" onclick="_wgMeasDropdownToggle(event)"
+          title="View waveguide measurements for this device">📐 Measurements</button>
+        <div id="wg-meas-dropdown"
+          style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;
+                 background:#161b22;border:1px solid #30363d;border-radius:6px;
+                 width:360px;max-height:320px;flex-direction:column;overflow:hidden;
+                 box-shadow:0 8px 24px #010409cc;">
+          <div id="wg-meas-panel-content"
+            style="overflow-y:auto;flex:1;padding:8px 12px;min-height:48px;
+                   scrollbar-width:thin;scrollbar-color:#30363d #0d1117;">
+            <span style="color:#484f58;font-size:11px;display:block;text-align:center;padding-top:20px;">
+              No measurements yet.<br>Use Measure Waveguide Lengths above.
+            </span>
+          </div>
+        </div>
+      </div>
       <span class="tb-zoom" id="zoom-info-3">zoom: 1.00×</span>
     </div>
     <div style="flex:1;position:relative;overflow:hidden;background:#0a0c10;" id="canvas-wrap-3">
@@ -367,6 +492,27 @@
       <div class="tb-sep"></div>
       <button class="tb-btn" onclick="_resetOptView()" title="Reset zoom and restore all curves">↺ Reset</button>
       <button class="tb-btn" id="btn-subtract" onclick="toggleOptSubtract()" title="Subtract Ref (1→6) from all curves">⇅ Subtract Ref</button>
+      <!-- ── Chip Loss Correction split-button ── -->
+      <div style="position:relative;display:inline-flex;align-items:stretch;flex-shrink:0;">
+        <button class="tb-btn" id="btn-chip-loss" onclick="toggleChipLoss()"
+          style="border-radius:4px 0 0 4px;border-right:none;"
+          title="Toggle chip loss correction">⬡ Chip Loss Corr</button>
+        <button id="chip-loss-arrow" onclick="_chipLossMenuToggle(event)"
+          style="border-radius:0 4px 4px 0;padding:0 6px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;cursor:pointer;font-size:10px;line-height:1;border-left:1px solid #30363d55;"
+          title="Chip loss settings">▾</button>
+        <div id="chip-loss-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:1000;
+          background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;width:210px;
+          box-shadow:0 8px 24px #010409cc;">
+          <div style="font-size:10px;color:#8b949e;margin-bottom:6px;font-weight:600;letter-spacing:.04em;">CHIP LOSS</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input id="chip-loss-input" type="number" value="-6" step="0.01"
+              style="flex:1;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:inherit;font-size:11px;padding:4px 7px;border-radius:4px;box-sizing:border-box;"
+              oninput="onChipLossChange()" title="Propagation loss in dB/cm (e.g. −6)">
+            <span style="font-size:10px;color:#484f58;flex-shrink:0;">dB/cm</span>
+          </div>
+          <div style="font-size:9px;color:#484f58;margin-top:5px;">Corrects each port's IL relative to the Ref waveguide length. Requires distance measurements of waveguides.</div>
+        </div>
+      </div>
       <span style="font-size:10px;color:#8b949e;flex-shrink:0;">Roll:</span>
       <input type="number" id="opt-rolling" value="1" min="1" max="500" oninput="onRollingChange()" title="Rolling-average window (pts)">
       <span style="font-size:10px;color:#8b949e;flex-shrink:0;">λ target:</span>
@@ -404,9 +550,12 @@
       <div id="opt-rd-empty" style="color:#484f58;font-size:11px;text-align:center;padding-top:40px;">No optical data loaded — load data in Optical Spectra first.</div>
       <div id="opt-rd-table" style="display:none;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #30363d;">
-          <span style="font-size:10px;color:#484f58;font-family:monospace;flex:1;">Curve</span>
-          <span style="font-size:9px;color:#8b949e;font-family:monospace;background:#21262d;padding:1px 5px;border-radius:3px;">Raw IL</span>
-          <span style="font-size:9px;color:#58a6ff;font-family:monospace;background:#0d2137;padding:1px 5px;border-radius:3px;">IL − Ref</span>
+          <!-- swatch placeholder to align with data rows (24px swatch + 7px gap) -->
+          <span style="width:24px;flex-shrink:0;"></span>
+          <span style="font-size:10px;color:#484f58;font-family:monospace;width:150px;flex-shrink:0;">Curve</span>
+          <span style="font-size:9px;color:#8b949e;font-family:monospace;background:#21262d;padding:1px 5px;border-radius:3px;flex-shrink:0;">Raw IL</span>
+          <span style="font-size:9px;color:#58a6ff;font-family:monospace;background:#0d2137;padding:1px 5px;border-radius:3px;flex-shrink:0;">IL − Ref</span>
+          <span style="font-size:9px;color:#3fb950;font-family:monospace;background:#0a1f14;padding:1px 5px;border-radius:3px;flex-shrink:0;">CL Corr.</span>
         </div>
         <div style="font-size:9px;color:#484f58;margin-bottom:10px;">
           at <span id="opt-rd-wl-lbl" style="color:#58a6ff;font-weight:bold;">1550.0 nm</span>
@@ -415,6 +564,7 @@
       </div>
     </div>
   </div>
+
 </div>
 
 
@@ -427,6 +577,17 @@
   <span><span class="stat-label">unit: </span><span id="st-unit">—</span></span>
   <span><span class="stat-label">mode: </span><span id="st-mode">pan</span></span>
   <span><span class="stat-label">cursor: </span><span id="st-cursor">—</span></span>
+</div>
+
+<!-- ═══ APPLY-TO-TYPE PICKER ════════════════════════════════════ -->
+<div id="wg-type-picker-menu"
+  style="display:none;position:fixed;z-index:2000;
+         background:#161b22;border:1px solid #30363d;border-radius:6px;
+         padding:10px 8px;min-width:210px;
+         box-shadow:0 8px 24px #010409cc;">
+  <div style="font-size:10px;color:#8b949e;font-weight:600;letter-spacing:.04em;
+              padding:0 4px;margin-bottom:6px;">SELECT TYPE TO APPLY TO</div>
+  <div id="wg-type-picker-list" style="display:flex;flex-direction:column;gap:1px;"></div>
 </div>
 
 <!-- ═══ MODAL ════════════════════════════════════════════════════ -->
@@ -490,6 +651,10 @@
 
 <!-- Optical data — chart, readout, CSV parsing (sub-tabs 3 & 4) -->
 <script src="/static/js/optical.js"></script>
+
+<!-- Optical grating coupler finder + overlay renderer (Sub-tab 1) -->
+<script src="/static/js/gratings.js"></script>
+<script src="/static/js/waveguides.js"></script>  <!-- after gratings, before device-viewer -->
 
 <!-- Device viewer core + application init()  ← must be LAST:
      its IIFE calls initCanvases, setupMouse, _initSemPreviewHandlers,

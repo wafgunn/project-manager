@@ -65,6 +65,16 @@ var _optNearTWL=false;     // mouse is hovering near the target-WL marker
 var _c2DownX=0,_c2DownY=0; // canvas2 click-vs-drag tracking
 var _mapBadgeHits=[];      // [{deviceId,subTab,x,y,w,h}] — rebuilt each drawDeviceMapSolid call
 
+// Grating coupler state  (written by gratings.js, read by device-viewer.js)
+// [{id, device_id, label, x0, y0, x1, y1, x0_um, y0_um, x1_um, y1_um}]
+var gratings=[];
+
+// Waveguide length measurement results  (written by waveguides.js)
+// [{device_id, device_label, from, to, length_um, discontinuity,
+//   comp_info:{center_um,dist_from_um,dist_to_um}|null,
+//   port_from, port_to, error}]
+var wgLengths=[];
+
 // Export layer settings (written by the dropdown, read by exportGDS)
 var exportLayer=1, exportDatatype=100;
 
@@ -88,3 +98,5 @@ var DEV_COLS=['#58a6ff','#3fb950','#ff7b72','#e3b341','#bc8cff','#ffa657','#79c0
 var layerColors={},layerColorIdx=0;
 function getLC(l,dt){var k=l+'/'+dt;if(!layerColors[k])layerColors[k]=LPAL[layerColorIdx++%LPAL.length];return layerColors[k];}
 function devColor(i){return DEV_COLS[i%DEV_COLS.length];}
+var chipLossActive = false;  // toggle for chip loss correction
+var chipLossDbCm   = -6.0;   // propagation loss coefficient (dB/cm, typically negative)

@@ -105,6 +105,7 @@ async def api_find_designs(req: FindDesignsRequest):
     session["designs"]     = result.get("designs", [])
     session["active_cell"] = req.cell
     session["arrays"]      = []   # clear stale grouping
+    session["gratings"]    = []   # clear stale gratings
     return result
 
 

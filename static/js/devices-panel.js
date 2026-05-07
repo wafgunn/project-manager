@@ -116,7 +116,12 @@ function _buildDeviceListInto(list){
         zoomToDevice(d);
         updateDevicesPanel();
         redrawActive();
-        if(currentTab===3&&dvSubTab===3){autoMatchOptDevice();drawOptChart();}
+        if(currentTab===3){
+          updateDeviceViewerHeader();
+          if(dvSubTab===2)renderSemGrid();
+          if(dvSubTab===3){autoMatchOptDevice();drawOptChart();}
+          if(dvSubTab===4){autoMatchOptDevice();renderOptReadout();}
+        }
       });
       body.appendChild(row);
     });
