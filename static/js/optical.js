@@ -62,6 +62,29 @@ var INTC1TO10_MTYPE_MAP={
 };
 // Display order for intc1to10 ports (Ref first, then ascending port number)
 var INTC1TO10_PORT_ORDER=['Ref','o2','o3','o4','o5','o6','o7','o8','o9','o10','o11'];
+// Port-to-grating mapping for intc1to10 devices.
+// 'in'/'out' are the G-labels emitted by the grating finder (G1..G13).
+// Mirrors the physical layout described in intc1to10_algorithms.py.
+var INTC1TO10_PORT_GRATING = {
+  'Ref': {in: 'G8', out: 'G6'},
+  'o2':  {in: 'G7', out: 'G9'},
+  'o3':  {in: 'G7', out: 'G10'},
+  'o4':  {in: 'G7', out: 'G11'},
+  'o5':  {in: 'G7', out: 'G12'},
+  'o6':  {in: 'G7', out: 'G13'},
+  'o7':  {in: 'G7', out: 'G1'},
+  'o8':  {in: 'G7', out: 'G2'},
+  'o9':  {in: 'G7', out: 'G3'},
+  'o10': {in: 'G7', out: 'G4'},
+  'o11': {in: 'G7', out: 'G5'},
+};
+
+// Port-to-grating mapping for crosser devices (T paths only; cross terms not corrected).
+var CROSSER_PORT_GRATING = {
+  'Ref (1→6)': {in: 'G1', out: 'G6'},
+  'T (2→4)':   {in: 'G2', out: 'G4'},
+  'T (3→5)':   {in: 'G3', out: 'G5'},
+};
 
 // loopback channel→curve map — mirrors loopback_algorithms.py CURVE_DEFS
 var LOOPBACK_MTYPE_MAP={
@@ -107,6 +130,8 @@ function _scanOptFromFiles(){
   var n=optDevices.length;
   document.getElementById('opt-status').textContent=n+' device'+(n===1?'':'s')+' found';
   redraw2();
+  // Auto-cache all devices so reference averaging is available immediately
+  _cacheAllKeys();
 }
 
 function _scanOptFromServer(path){
@@ -125,6 +150,8 @@ function _scanOptFromServer(path){
     var n=optDevices.length;
     document.getElementById('opt-status').textContent=n+' device'+(n===1?'':'s')+' found';
     redraw2();
+    // Auto-cache all devices so reference averaging is available immediately
+    _cacheAllKeys();
   })
   .catch(function(e){showModal('Server Error',''+e,'',true);});
 }
@@ -201,7 +228,7 @@ function _updateOptWLStep(curves){
 
 function _loadKeyFromFiles(key,files){
   if(!files.length){
-    optCache[key]=[];delete _subCache[key];
+    optCache[key]=[];delete _subCache[key];delete _subCache[key+'\x00cl'];
     var pmsg=document.getElementById('opt-ph-msg');
     if(pmsg)pmsg.innerHTML='No optical data for this device.';
     document.getElementById('opt-status').textContent='No data for '+key;
@@ -217,7 +244,7 @@ function _loadKeyFromFiles(key,files){
       if(res)curves=curves.concat(res);
       if(--pending===0){
         curves=_mergeOptCurves(curves);
-        optCache[key]=curves;delete _subCache[key];
+        optCache[key]=curves;delete _subCache[key];delete _subCache[key+'\x00cl'];
         _updateOptWLStep(curves);
         document.getElementById('opt-status').textContent=key+': '+curves.length+' curves';
         document.getElementById('opt-ph').style.display='none';
@@ -242,7 +269,7 @@ function _loadKeyFromServer(key,path,dataType,searchLabel){
   .then(function(r){return r.json();})
   .then(function(data){
     if(data.error){showModal('Error',data.error,'',true);return;}
-    optCache[key]=data.curves||[];delete _subCache[key];
+    optCache[key]=data.curves||[];delete _subCache[key];delete _subCache[key+'\x00cl'];
     _updateOptWLStep(optCache[key]);
     var n=(data.curves||[]).length;
     document.getElementById('opt-status').textContent=key+': '+n+' curve'+(n===1?'':'s');
@@ -308,10 +335,97 @@ function toggleOptSubtract(){
   optSubtract=!optSubtract;
   var btn=document.getElementById('btn-subtract');
   if(btn)btn.classList.toggle('active',optSubtract);
-  // reset zoom when toggling so auto-range recalculates for new data range
+  _subCache={};
   optViewXMin=null;optViewXMax=null;optViewYMin=null;optViewYMax=null;
   drawOptChart();
   if(dvSubTab===4)renderOptReadout();
+}
+
+
+function toggleChipLoss(){
+  chipLossActive=!chipLossActive;
+  var btn=document.getElementById('btn-chip-loss');
+  if(btn)btn.classList.toggle('active',chipLossActive);
+  _subCache={};
+  optViewXMin=null;optViewXMax=null;optViewYMin=null;optViewYMax=null;
+  drawOptChart();
+  if(dvSubTab===4)renderOptReadout();
+}
+
+function _chipLossMenuToggle(e){
+  e.stopPropagation();
+  var m=document.getElementById('chip-loss-menu');
+  if(!m)return;
+  m.style.display=(m.style.display==='none'||!m.style.display)?'block':'none';
+}
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('chip-loss-menu');
+  var arrow=document.getElementById('chip-loss-arrow');
+  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&e.target!==arrow)
+    menu.style.display='none';
+});
+
+function onChipLossChange(){
+  var inp=document.getElementById('chip-loss-input');
+  chipLossDbCm=parseFloat(inp?inp.value:-6)||chipLossDbCm;
+  if(chipLossActive){_subCache={};drawOptChart();if(dvSubTab===4)renderOptReadout();}
+}
+
+/**
+ * Build port→correction_dB for the active device.
+ * Only works for intc1to10 type devices with matching wgLengths entries.
+ */
+function _getChipLossLengths(){
+  if(activeDeviceId<0)return{};
+  var devMeas=wgLengths.filter(function(r){
+    return r.device_id===activeDeviceId&&!r.discontinuity&&r.length_um!==null;
+  });
+  if(!devMeas.length)return{};
+  var dev=devices.find(function(d){return d.id===activeDeviceId;});
+  if(!dev)return{};
+  var devType=(typeof _wgDeviceType==='function')?_wgDeviceType(dev):'';
+  // Select port-grating mapping and reference key based on device type
+  var portGrating,refKey;
+  if(devType&&devType.indexOf('intc1to10')>=0){
+    portGrating=INTC1TO10_PORT_GRATING;
+    refKey='Ref';
+  } else if(devType&&devType.indexOf('crosser')>=0){
+    portGrating=CROSSER_PORT_GRATING;
+    refKey='Ref (1→6)';
+  } else {
+    return{};
+  }
+  var refPg=portGrating[refKey];
+  var refMeas=devMeas.find(function(r){
+    return(r.from===refPg.in&&r.to===refPg.out)||(r.from===refPg.out&&r.to===refPg.in);
+  });
+  if(!refMeas)return{};
+  var refLen=refMeas.length_um;
+  var corrections={};
+  corrections[refKey]=0;
+  Object.keys(portGrating).forEach(function(port){
+    if(port===refKey)return;
+    var g=portGrating[port];
+    var meas=devMeas.find(function(r){
+      return(r.from===g.in&&r.to===g.out)||(r.from===g.out&&r.to===g.in);
+    });
+    if(!meas)return;
+    var deltaL_cm=(meas.length_um-refLen)*1e-4;   // positive = port longer than Ref
+    corrections[port]=-chipLossDbCm*deltaL_cm;     // shorter than Ref → more negative IL; longer → more positive IL
+  });
+  return corrections;
+}
+
+/**
+ * Apply corrections (port→dB offset) to raw curves array (non-destructive).
+ */
+function _applyChipLoss(rawCurves,corrections){
+  if(!corrections||!Object.keys(corrections).length)return rawCurves;
+  return rawCurves.map(function(c){
+    var corr=corrections[c.label];
+    if(corr===undefined||corr===0)return c;
+    return Object.assign({},c,{il:c.il.map(function(v){return v+corr;})});
+  });
 }
 
 // Returns curves with ref curve subtracted from every other curve's IL.
@@ -355,10 +469,11 @@ function _optInterpolateAt(wls,ils,twl){
 }
 
 // Average the Ref-curve IL at *twl* across every cached device of *type*.
-// Returns {val, n} — val is NaN when no ref data is available.
+// Returns {val, n, nTotal} — val is NaN when no ref data is available.
+// Applies 3-sigma outlier rejection when ≥3 values are available.
 // Loopbacks have no reference, so always return NaN for that type.
 function _globalRefIL(twl, roll, type){
-  if(!type||type==='loopback')return{val:NaN,n:0};
+  if(!type||type==='loopback')return{val:NaN,n:0,nTotal:0};
   var vals=[];
   optDevices.forEach(function(dev){
     if(dev.type!==type)return;
@@ -369,8 +484,18 @@ function _globalRefIL(twl, roll, type){
     var v=_optInterpolateAt(rc.wl,rollingAvg(rc.il,roll),twl);
     if(isFinite(v))vals.push(v);
   });
-  if(!vals.length)return{val:NaN,n:0};
-  return{val:vals.reduce(function(s,v){return s+v;},0)/vals.length,n:vals.length};
+  if(!vals.length)return{val:NaN,n:0,nTotal:0};
+  var nTotal=vals.length;
+  // 3-sigma outlier rejection — only meaningful with ≥3 samples
+  if(nTotal>=3){
+    var mean0=vals.reduce(function(s,v){return s+v;},0)/nTotal;
+    var sd=Math.sqrt(vals.reduce(function(s,v){return s+(v-mean0)*(v-mean0);},0)/nTotal);
+    if(sd>0){
+      var kept=vals.filter(function(v){return Math.abs(v-mean0)<=3*sd;});
+      if(kept.length>0)vals=kept;
+    }
+  }
+  return{val:vals.reduce(function(s,v){return s+v;},0)/vals.length,n:vals.length,nTotal:nTotal};
 }
 
 function renderOptReadout(){
@@ -397,6 +522,8 @@ function renderOptReadout(){
   // Build subtracted curves for the right column (cached)
   var subCurves=_getSubCurves(optCurrentKey,rawCurves);
   var subMap={};subCurves.forEach(function(c){subMap[c.label]=c;});
+  // Chip loss corrections map: port label → correction_dB (0 when inactive)
+  var clCorr=chipLossActive?_getChipLossLengths():{};
   // Find ref curve for raw IL at target WL (works for both crossers and MRRs)
   var refCurve=rawCurves.find(function(c){return /\bRef\b/i.test(c.label);});
   var refRL=refCurve?rollingAvg(refCurve.il,roll):null;
@@ -410,8 +537,10 @@ function renderOptReadout(){
     if(isFinite(_gRef.val)){
       _refLblEl.textContent=_gRef.val.toFixed(2)+' dB';
       _refLblEl.style.color='#c9d1d9';
+      var _excluded=_gRef.nTotal-_gRef.n;
       _refLblEl.title='Global avg Ref at '+twl.toFixed(1)+' nm'
-        +' (n='+_gRef.n+' '+_curType+' device'+(_gRef.n===1?'':'s')+' cached)';
+        +' (n='+_gRef.n+' '+_curType+' device'+(_gRef.n===1?'':'s')+' cached'
+        +(_excluded>0?', '+_excluded+' outlier'+(_excluded===1?'':'s')+' excluded (>3σ)':'')+')';
     } else if(_curType==='loopback'){
       _refLblEl.textContent='n/a';
       _refLblEl.style.color='#484f58';
@@ -445,12 +574,29 @@ function renderOptReadout(){
       subStr='—';
     }
     var subColor=isRef?'#484f58':'#58a6ff';
+    // Chip loss corrected column
+    var clDelta=clCorr[curve.label];
+    var clStr,clColor;
+    if(!chipLossActive){
+      clStr='—';clColor='#484f58';
+    } else if(clDelta===undefined){
+      clStr='n/a';clColor='#484f58';
+    } else {
+      if(isRef){
+        clStr='0.00 dB';clColor='#484f58';
+      } else {
+        var clIL=(isFinite(rawIL)&&isFinite(refIL))?rawIL+clDelta-refIL:NaN;
+        clStr=isFinite(clIL)?clIL.toFixed(2)+' dB':'—';
+        clColor='#3fb950';
+      }
+    }
     html+='<div style="display:flex;align-items:center;gap:7px;'
         +'padding:4px 0;border-bottom:1px solid #21262d20;opacity:'+(hidden?'0.35':'1')+'">'
         +swatch
-        +'<span style="font-size:10px;color:#c9d1d9;font-family:monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+curve.label+'</span>'
+        +'<span style="font-size:10px;color:#c9d1d9;font-family:monospace;width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+curve.label+'</span>'
         +'<span style="font-size:11px;font-weight:bold;color:'+col+';font-family:monospace;background:#21262d;padding:1px 6px;border-radius:3px;flex-shrink:0;">'+rawStr+'</span>'
         +'<span style="font-size:11px;font-weight:bold;color:'+subColor+';font-family:monospace;background:#0d2137;padding:1px 6px;border-radius:3px;flex-shrink:0;">'+subStr+'</span>'
+        +'<span style="font-size:11px;font-weight:bold;color:'+clColor+';font-family:monospace;background:#0a1f14;padding:1px 6px;border-radius:3px;flex-shrink:0;">'+clStr+'</span>'
         +'</div>';
   });
   rowsEl.innerHTML=html;
@@ -523,8 +669,8 @@ function _cacheAllKeys(){
     } else if(optServerPath){
       fetch('/api/optical-data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:optServerPath,label:key,data_type:'auto'})})
       .then(function(r){return r.json();})
-      .then(function(data){optCache[key]=data.curves||[];delete _subCache[key];onKeyDone();})
-      .catch(function(){optCache[key]=[];delete _subCache[key];onKeyDone();});
+      .then(function(data){optCache[key]=data.curves||[];delete _subCache[key];delete _subCache[key+'\x00cl'];onKeyDone();})
+      .catch(function(){optCache[key]=[];delete _subCache[key];delete _subCache[key+'\x00cl'];onKeyDone();});
     } else {optCache[key]=[];delete _subCache[key];onKeyDone();}
   });
 }
@@ -661,6 +807,8 @@ function clearOptData(){
   optViewXMin=null;optViewXMax=null;optViewYMin=null;optViewYMax=null;
   optSubtract=false;
   var btn=document.getElementById('btn-subtract');if(btn)btn.classList.remove('active');
+  chipLossActive=false;
+  var clBtn=document.getElementById('btn-chip-loss');if(clBtn)clBtn.classList.remove('active');
   var devItems=document.getElementById('opt-dev-items');
   if(devItems)devItems.innerHTML='';
   document.getElementById('opt-status').textContent='No data loaded';
@@ -696,7 +844,18 @@ function _niceStep(range){
 // mapping always matches what drawOptChart actually drew.
 function _optActiveCurves(){
   var raw=optCurrentKey&&optCache[optCurrentKey]?optCache[optCurrentKey]:[];
-  return (optSubtract&&raw.length)?_getSubCurves(optCurrentKey,raw):raw;
+  if(!raw.length)return raw;
+  var working=raw;
+  if(chipLossActive){
+    var corr=_getChipLossLengths();
+    working=_applyChipLoss(raw,corr);
+  }
+  if(optSubtract&&working.length){
+    var subKey=optCurrentKey+(chipLossActive?'\x00cl':'');
+    if(!_subCache[subKey])_subCache[subKey]=_applySubtraction(working);
+    return _subCache[subKey];
+  }
+  return working;
 }
 
 function _optGetCurrentRanges(allCurves,roll){
@@ -723,7 +882,7 @@ function drawOptChart(){
   var ph=document.getElementById('opt-ph');
   if(!rawCurves.length){if(ph)ph.style.display='flex';renderOptLegend([]);return;}
   if(ph)ph.style.display='none';
-  var allCurves=optSubtract?_getSubCurves(optCurrentKey,rawCurves):rawCurves;
+  var allCurves=_optActiveCurves();
   var roll=Math.max(1,parseInt(document.getElementById('opt-rolling').value)||1);
   var m={t:38,r:22,b:52,l:68};
   var pw=cw-m.l-m.r,phH=ch-m.t-m.b;
@@ -800,9 +959,10 @@ function drawOptChart(){
   var xlbl='Wavelength (nm)';
   ctx.fillText(xlbl,m.l+pw/2-ctx.measureText(xlbl).width/2,ch-6);
   var ylbl=optSubtract?'IL − Ref (dB)':'IL (dB)';
+  if(chipLossActive)ylbl+=' [CL]';
   ctx.save();ctx.translate(14,m.t+phH/2);ctx.rotate(-Math.PI/2);ctx.fillText(ylbl,0,0);ctx.restore();
   var vis=allCurves.length-hiddenCurves.size;
-  var modeTag=optSubtract?' [− Ref]':'';
+  var modeTag=(optSubtract?' [− Ref]':'')+(chipLossActive?' [CL]':'');
   ctx.fillStyle='#c9d1d9';ctx.font='bold 11px monospace';
   ctx.fillText((optCurrentKey||'')+'  —  Optical Spectra'+modeTag+'  ('+vis+'/'+allCurves.length+')',m.l,m.t-12);
   renderOptLegend(allCurves);

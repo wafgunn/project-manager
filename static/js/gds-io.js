@@ -118,6 +118,7 @@ function findDevices(){
     devices=(data.designs||[]).map(function(d,i){
       return Object.assign({},d,{color:devColor(i)});
     });
+    gratings=[];   // stale — user must re-run Find Optical Gratings
     deviceGroups=[];
     selectedDevices=new Set();
     highlightedDevice=-1;
@@ -152,7 +153,7 @@ function findDevices(){
 // CLEAR DEVICES
 // ═══════════════════════════════════════════════════════════════════
 function clearDevices(){
-  devices=[];deviceGroups=[];selectedDevices=new Set();highlightedDevice=-1;
+  devices=[];gratings=[];deviceGroups=[];selectedDevices=new Set();highlightedDevice=-1;
   nextGroupLetter=0;nextGroupId=0;collapsedGroups=new Set();hiddenGroups=new Set();
   ['t1-export-btn','export-footer-btn','export-footer-btn-2','t2-export-btn',
    'export-layer-arrow','export-layer-arrow-2','clear-btn','merge-btn','group-btn'].forEach(function(id){

@@ -245,6 +245,8 @@ function updateDeviceViewerHeader(){
   document.getElementById('dv-title').textContent=label;
   document.getElementById('dv-dims').textContent=wUm+' × '+hUm+' µm';
   renderSemGrid();
+  // Refresh the View Measurements panel whenever the active device changes
+  if (typeof _wgRenderMeasurementsPanel === 'function') _wgRenderMeasurementsPanel();
 }
 
 function autoMatchOptDevice(){
@@ -348,7 +350,7 @@ function setDvSubTab(n){
   if(n===1){if(canvas3)resizeCanvas(canvas3);redraw3();fitToActiveDevice();}
   if(n===2)renderSemGrid();
   if(n===3){resizeOptChart();autoMatchOptDevice();drawOptChart();}
-  if(n===4)renderOptReadout();
+  if(n===4){autoMatchOptDevice();renderOptReadout();}
 }
 
 
@@ -387,6 +389,9 @@ function redraw3(){
       ctx3.fillStyle='#00000099';ctx3.fillRect(sx+2,sy+2,tw+6,fs+4);
       ctx3.fillStyle='#ffffff';ctx3.fillText(lbl,sx+5,sy+fs+3);
     }
+    drawGratingOverlays(ctx3);
+    drawWgPathOverlays(ctx3);
+    drawWgLengthOverlays(ctx3);
     if(tool3==='ruler')drawRuler(ctx3);
     updateZoomLabel();
   });
